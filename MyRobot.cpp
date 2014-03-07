@@ -1,135 +1,233 @@
 #include "WPILib.h"
 
+// Nathan Amarandos - Team 3045
+// With meddling from some others...
 
-class RobotDemo : public SimpleRobot
+#define autonomous_Forward_Speed -1.0	// how fast to move
+#define autonomous_Forward_Time 1.0		// how long to move
+#define autonomous_Settle_Time 0.25		// how long to settle down before firing
+
+class File2014 : public SimpleRobot
 {
-	RobotDrive myRobot; // robot drive system
-	DigitalInput shoot;
-	Joystick stick; // only joystick
-	Victor shooter;
-	Victor forklift;
-	Victor  winch;
-	DoubleSolenoid shooterSole;//Festo
-	Compressor compressor;
-	Encoder shooterEnconder;
+	RobotDrive myRobot;
+	Joystick stickA;	// "Adam's" joystick
+	Joystick stickN;	// "Nathan's" joystick
 	
+	Victor shooter; 
+	Victor forklift; 
+	Victor catcher; 
+
+	DigitalInput stopCocking;
+	DigitalInput shoot;
+	DigitalInput catcherTop;
+	DigitalInput catcherBottom;
+	DigitalInput pickerStop;
+	
+	Compressor compressor;
+	DoubleSolenoid shooterSole;
+
 public:
-	RobotDemo(): 
-		myRobot(1,2,3,4),	//front left, rear left, front right, rear right	(10,4,3,7) for whack		(purple, yellow, green, red)
-		shoot(10),
-		stick(1),		// usb number
-		shooter(6),
-		forklift(5),
-		winch(7),
-		shooterSole(2,3),//initialize festo valves
-					//forward channel, reverse channel
-		compressor(3, 3),
+	File2014():
+		myRobot(1, 2,3,8),	
+		stickA(1),		
+		stickN(2),
 		
-			//(pressure switch channel, compressor relay channel) or
-				//(pressure switch module number, pressure switch channel, compressor relay module number, compressor relay channel)
-		shooterEnconder(5,6,false)//uint32_t aChannel, uint32_t bChannel, bool reverseDirection=false, EncodingType encodingType=k4X
+		shooter(6),
+		forklift(10),
+		catcher(9),
+		
+		stopCocking(10),
+		shoot(3),
+		catcherTop(2),
+		catcherBottom(5),
+		pickerStop(1),
+		
+		compressor(4,1),//switch, relay
+		shooterSole(2,3)
 	{
 		myRobot.SetExpiration(0.1);
 	}
 
-	
 	void Autonomous()
 	{
-		compressor.Start();//start compressor
-		myRobot.SetSafetyEnabled(false);
-		myRobot.Drive(-0.5, 0.0); 	// drive forwards half speed
-		Wait(2.0); 				//    for 2 seconds
-		myRobot.Drive(0.0, 0.0); 	// stop robot
+		myRobot.SetSafetyEnabled(true);
+		myRobot.SetInvertedMotor(myRobot.kRearLeftMotor, true);
+		myRobot.SetInvertedMotor(myRobot.kRearRightMotor, true);
+		myRobot.SetInvertedMotor(myRobot.kFrontLeftMotor, false);
+		myRobot.SetInvertedMotor(myRobot.kFrontRightMotor, true);
 		
+		myRobot.Drive(autonomous_Forward_Speed,0);	// go forward (backward!) at speed x...
+		Wait(autonomous_Forward_Time);				// for time y...
+		myRobot.Drive(0,0);							// stop again
+		Wait(autonomous_Settle_Time);				// settle down for a bit
 		
-		while (!shoot.Get()){//while shooter isnt cocked pull it back
-			shooter.SetSpeed(1); //set motor
+#if 0
+		bool stop = true;
+		if (shoot.Get())
+			stop = false;
+		
+		while(stop){
+		shooter.SetSpeed(-1);
+		if (shoot.Get())
+			stop = false;
 		}
 		
-		shooterSole.Set(shooterSole.kForward);//Sets Solenoid forward, shoot ball
-		shooterSole.Set(shooterSole.kReverse);//Sets Solenoid backward
-		
-		myRobot.Drive(1.0, -1.0);//turn around for 0.5 seconds, we have to check to see if it takes that long
-		Wait(0.5);//wait for 0.5 seconds
-		myRobot.Drive(0.0, 0.0);//stop robot
+		shooter.SetSpeed(0);
+		//Check if Goal is hot
+		Wait(0.5);
+		shooterSole.Set(shooterSole.kReverse);//Shoots the ball
+		Wait(0.5);
+		myRobot.Drive(-1,0);
+		Wait(0.5;)
+		myRobot.Drive(0,0);
+#endif
 	}
-
 	
 	void OperatorControl()
 	{
-		compressor.Start();
 		myRobot.SetSafetyEnabled(true);
-		myRobot.SetInvertedMotor(myRobot.kRearLeftMotor, true);//Invert rear left Motor
-		myRobot.SetInvertedMotor(myRobot.kRearRightMotor, true);//Invert rear right motor
-		myRobot.SetInvertedMotor(myRobot.kFrontLeftMotor, true);//Invert rear right motor
+		GetWatchdog().SetEnabled(true);
+		compressor.Start();
+		//Inverting all true for bag
+		myRobot.SetInvertedMotor(myRobot.kRearLeftMotor, true);
+		myRobot.SetInvertedMotor(myRobot.kRearRightMotor, true);
+		myRobot.SetInvertedMotor(myRobot.kFrontLeftMotor, false);
 		myRobot.SetInvertedMotor(myRobot.kFrontRightMotor, true);
-		
-		DriverStation *ds;
-		DriverStationLCD *dsLCD;
-		ds = DriverStation::GetInstance();
-		dsLCD = DriverStationLCD::GetInstance();
-		
-		dsLCD->Printf(DriverStationLCD::kUser_Line1,1, "Starting Teleop");
-		dsLCD->UpdateLCD();
+		shooterSole.Set(shooterSole.kForward);
+	
 		
 		while (true)
 		{
-			if (!compressor.GetPressureSwitchValue()){
-				compressor.Start();
+			GetWatchdog().Feed();
+			myRobot.ArcadeDrive(stickA);
+			//Forklift Code
+			double forkliftSpeed = 0;
+			if (stickA.GetRawButton(5)){ // 5 is left bumper; 6 is right bumper
+				forkliftSpeed = .5;
 			}
-			myRobot.ArcadeDrive(stick); 
+						
+			if (stickA.GetRawButton(6)){
+				forkliftSpeed = -.5;
+			}
+		
+			if (!(stickA.GetRawButton(5)||stickA.GetRawButton(6))){
+				forkliftSpeed = 0;
+			}
+
+			if (pickerStop.Get()){
+				forkliftSpeed = 0;
+			}
+			if (pickerStop.Get()&&stickA.GetRawButton(6)){
+				forkliftSpeed = -.5;
+			}
 			
-			 /*PNEUMATIC CODE*/
-			if (stick.GetRawButton(8)){
+			forklift.SetSpeed(forkliftSpeed);
+	
+						
+			//Shooter Motor Code
+			double shooterSpeed = 0;
+			
+			if (stickN.GetRawButton(4)) {	// 4 'A' button; 2 "Y" button
+				shooterSpeed = 1;
+			}
+			if (stickN.GetRawButton(2)){
+				shooterSpeed = -1;
+			}
+			if (!(stickN.GetRawButton(2)||stickN.GetRawButton(4))){
+				shooterSpeed = 0;
+			}
+
+			if (shoot.Get()){
+				shooterSpeed = 0;
+			}
+			
+			if (stopCocking.Get()){
+				shooterSpeed = 0;
+			}
+			
+			if (stopCocking.Get()&&stickN.GetRawButton(2)){
+				shooterSpeed = -1;
+			}
+						
+			if (shoot.Get()&&stickN.GetRawButton(4)){
+				shooterSpeed = 1;
+			}
+			
+			shooter.SetSpeed(shooterSpeed);
+			
+			//Shooter Pneumatic Code
+			if(stickN.GetRawButton(1)){	// 1 X 3 is B; 7 8 l and r triggers.
 				shooterSole.Set(shooterSole.kForward);
 			}
-			if (stick.GetRawButton(1)){
+			if(stickN.GetRawButton(3)){
 				shooterSole.Set(shooterSole.kReverse);
 			}
-			 /*SHOOTER CODE*/
-			if (stick.GetRawButton(2)){
-				shooter.SetSpeed(1);
+			
+			//Catcher Code
+			double catcherSpeed = 0;
+			if (stickN.GetRawButton(5)){
+				catcherSpeed = 1;
 			}
-			if (stick.GetRawButton(4)){
-				shooter.SetSpeed(-1);
-				dsLCD->Printf(DriverStationLCD::kUser_Line1,(int)forklift.Get(), "Shooter Should be negative");
-				dsLCD->UpdateLCD();
+						
+			if (stickN.GetRawButton(6)){
+				catcherSpeed = -1;
 			}
-			if (!stick.GetRawButton(4) || !stick.GetRawButton(2)){
-				shooter.SetSpeed(0);
-			}
-			 /* FORKLIFT CODE*/
-			if (!stick.GetRawButton(5) || !stick.GetRawButton(6)){
-				forklift.SetSpeed(0);
-			} 
-			if (stick.GetRawButton(5)){
-				forklift.SetSpeed(1);
-			}
-			if (stick.GetRawButton(6)){
-				forklift.SetSpeed(-1);
-				dsLCD->Printf(DriverStationLCD::kUser_Line1,(int)forklift.Get(), "Forklift Should be negative");
-				dsLCD->UpdateLCD();
-			}
-			if (!shoot.Get()){
-				shooter.SetSpeed(0);
-				shooterSole.Set(shooterSole.kForward);
+						
+			if (!(stickN.GetRawButton(5)||stickN.GetRawButton(6))){
+				catcherSpeed = 0;
 			}
 			
-			
-			if (stick.GetRawButton(11)){
-				//myRobot.m_rearLeftMotor.SetSpeed(1);
-				//myRobot.m_rearRightMotor.SetSpeed(1);
-				//myRobot.m_frontLeftMotor.SetSpeed(1);
-				//myRobot.m_frontRightMotor.SetSpeed(1);
+			if (catcherTop.Get()){
+				catcherSpeed = 0;
 			}
-			//Wait(0.005);// wait for a motor update time
-		}
-	}
-
+			
+			if (catcherBottom.Get()){
+				catcherSpeed = 0;
+			}
+			
+			if (catcherTop.Get()&&stickN.GetRawButton(5)){
+				catcherSpeed = 1;
+			}
+			
+			if (catcherBottom.Get()&&stickN.GetRawButton(6)){
+				catcherSpeed = -1;
+			}
+			
+			catcher.SetSpeed(catcherSpeed);
+			
+			if (stickN.GetRawButton(7)){
+				bool clicked = true;
+				while(clicked){
+					shooterSole.Set(shooterSole.kForward);
+					myRobot.Drive(1.0, 1.2);//power  of drive train, radians
+					Wait(0.05);
+					myRobot.Drive(1.0, -1.2);
+					Wait(0.05);
+					myRobot.Drive(0.0, 0.0);
+					shooterSole.Set(shooterSole.kReverse);
+					clicked = false;
+				}
+			}
+			if (stickN.GetRawButton(8)){
+					bool clicked = true;
+					while(clicked){
+					shooterSole.Set(shooterSole.kForward);
+					myRobot.Drive(1.0, -1.2);//power  of drive train, radians
+					Wait(0.05);
+					myRobot.Drive(1.0, 1.2);
+					Wait(0.05);
+					myRobot.Drive(0.0, 0.0);
+					shooterSole.Set(shooterSole.kReverse);
+					clicked = false;
+				}
+			}
+		}//Close Loop
+	}//Close Operator Control Method
+	
 	void Test() {
 
 	}
 };
 
-START_ROBOT_CLASS(RobotDemo);
+START_ROBOT_CLASS(File2014);
 
