@@ -1,4 +1,8 @@
 #include "WPILib.h"
+#include "NetworkTables/NetworkTable.h"
+
+#include <Timer.h>
+
 
 // Nathan Amarandos - Team 3045
 // With meddling from some others...
@@ -25,9 +29,16 @@ class File2014 : public SimpleRobot
 	
 	Compressor compressor;
 	DoubleSolenoid shooterSole;
-
+	
+	Timer autonTimer;
+	
 public:
+	NetworkTable *table;
+	
+	
 	File2014():
+		
+	
 		myRobot(1, 2,3,8),	
 		stickA(1),		
 		stickN(2),
@@ -46,6 +57,10 @@ public:
 		shooterSole(2,3)
 	{
 		myRobot.SetExpiration(0.1);
+#if 1
+		table = NetworkTable::GetTable("3045RobotVision");
+		table->PutBoolean("hotTarget", false);
+#endif
 	}
 
 	void Autonomous()
@@ -53,15 +68,46 @@ public:
 		myRobot.SetSafetyEnabled(true);
 		myRobot.SetInvertedMotor(myRobot.kRearLeftMotor, true);
 		myRobot.SetInvertedMotor(myRobot.kRearRightMotor, true);
-		myRobot.SetInvertedMotor(myRobot.kFrontLeftMotor, false);
+		myRobot.SetInvertedMotor(myRobot.kFrontLeftMotor, true);
 		myRobot.SetInvertedMotor(myRobot.kFrontRightMotor, true);
+		shooterSole.Set(shooterSole.kForward);
+		compressor.Start();
+	
+#if 1		
+		myRobot.Drive(autonomous_Forward_Speed,0);	// go forward (backward!) at speed x...
+		Wait(autonomous_Forward_Time);				// for time y...
+		myRobot.Drive(0,0);							// stop again
+		Wait(autonomous_Settle_Time);	// settle down for a bit
 		
 		myRobot.Drive(autonomous_Forward_Speed,0);	// go forward (backward!) at speed x...
 		Wait(autonomous_Forward_Time);				// for time y...
 		myRobot.Drive(0,0);							// stop again
-		Wait(autonomous_Settle_Time);				// settle down for a bit
+		Wait(autonomous_Settle_Time);	// settle down for a bit
 		
+		myRobot.Drive(autonomous_Forward_Speed,0);	// go forward (backward!) at speed x...
+		Wait(autonomous_Forward_Time);				// for time y...
+		myRobot.Drive(0,0);							// stop again
+		Wait(autonomous_Settle_Time);	// settle down for a bit
+
+#endif
+
 #if 0
+		double cumTime = 0.0;
+		autonTimer.Start();
+		double startTime = autonTimer.Get();
+		table->PutNumber("startTime", startTime);
+		cumTime = autonTimer.Get();
+		while ((cumTime-startTime) < 2.0) {
+			myRobot.Drive(autonomous_Forward_Speed, 0.0);
+			cumTime = autonTimer.Get();
+			table->PutNumber("cumTime", cumTime);
+			printf("time: %g\n", cumTime);
+		}
+		printf("time: %g\n", cumTime);
+#endif				
+	
+		table->GetBoolean("hotTarget");
+#if 1		
 		bool stop = true;
 		if (shoot.Get())
 			stop = false;
@@ -74,12 +120,16 @@ public:
 		
 		shooter.SetSpeed(0);
 		//Check if Goal is hot
-		Wait(0.5);
+		Wait(0.1);
 		shooterSole.Set(shooterSole.kReverse);//Shoots the ball
 		Wait(0.5);
 		myRobot.Drive(-1,0);
-		Wait(0.5;)
-		myRobot.Drive(0,0);
+		Wait(0.5);
+		myRobot.Drive(0,0); 
+#endif
+		
+#if 0
+		table->GetBoolean("hotTarget");
 #endif
 	}
 	
@@ -91,7 +141,7 @@ public:
 		//Inverting all true for bag
 		myRobot.SetInvertedMotor(myRobot.kRearLeftMotor, true);
 		myRobot.SetInvertedMotor(myRobot.kRearRightMotor, true);
-		myRobot.SetInvertedMotor(myRobot.kFrontLeftMotor, false);
+		myRobot.SetInvertedMotor(myRobot.kFrontLeftMotor, true);
 		myRobot.SetInvertedMotor(myRobot.kFrontRightMotor, true);
 		shooterSole.Set(shooterSole.kForward);
 	
@@ -159,7 +209,7 @@ public:
 			if(stickN.GetRawButton(1)){	// 1 X 3 is B; 7 8 l and r triggers.
 				shooterSole.Set(shooterSole.kForward);
 			}
-			if(stickN.GetRawButton(3)){
+			if(stickN.GetRawButton(8)){
 				shooterSole.Set(shooterSole.kReverse);
 			}
 			
@@ -208,9 +258,10 @@ public:
 					clicked = false;
 				}
 			}
-			if (stickN.GetRawButton(8)){
-					bool clicked = true;
-					while(clicked){
+#if 0
+			if (stickN.GetRawButton(8)) {
+				bool clicked = true;
+				while (clicked) {
 					shooterSole.Set(shooterSole.kForward);
 					myRobot.Drive(1.0, -1.2);//power  of drive train, radians
 					Wait(0.05);
@@ -221,13 +272,15 @@ public:
 					clicked = false;
 				}
 			}
+#endif
 		}//Close Loop
 	}//Close Operator Control Method
-	
+
+
 	void Test() {
 
-	}
-};
+		}
+	};
 
 START_ROBOT_CLASS(File2014);
 
